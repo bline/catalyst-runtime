@@ -119,3 +119,4 @@ SKIP:
     ok( $response->is_success, 'Response Successful 2xx' );
     is( $response->header( 'X-Catalyst-warnings' ), 0, 'no warnings emitted' );
 }
+
