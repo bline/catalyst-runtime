@@ -920,6 +920,9 @@ If the last argument to C<uri_for> is a hash reference, it is assumed to
 contain GET parameter key/value pairs, which will be appended to the URI
 in standard fashion.
 
+Note that uri_for is destructive to the passed hashref.  Subsequent calls
+with the same hashref may have unintended results.
+
 Instead of C<$path>, you can also optionally pass a C<$action> object
 which will be resolved to a path using
 C<< $c->dispatcher->uri_for_action >>; if the first element of
@@ -978,7 +981,7 @@ sub uri_for {
           $val = '' unless defined $val;
           (map {
               $_ = "$_";
-              utf8::encode( $_ );
+              utf8::encode( $_ ) if utf8::is_utf8($_);
               # using the URI::Escape pattern here so utf8 chars survive
               s/([^A-Za-z0-9\-_.!~*'() ])/$URI::Escape::escapes{$1}/go;
               s/ /+/g;
@@ -1432,6 +1435,7 @@ sub finalize_headers {
             }
         }
         else {
+            # everything should be bytes at this point, but just in case
             $c->response->content_length( bytes::length( $c->response->body ) );
         }
     }
