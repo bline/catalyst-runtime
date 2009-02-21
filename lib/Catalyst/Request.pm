@@ -121,18 +121,21 @@ has hostname => (
 
 has _path => ( is => 'rw', predicate => '_has_path', clearer => '_clear_path' );
 
-# XXX: Deprecated in 5.8000 due to confusion between Engines and Plugin::Authentication. Remove in 5.x000?
+# XXX: Deprecated in docs ages ago (2006), deprecated with warning in 5.8000 due
+# to confusion between Engines and Plugin::Authentication. Remove in 5.8100?
 has user => (is => 'rw');
-
+has _user_deprecated_has_warned => ( is => 'rw', default => 0 );
 before user => sub {
-  my ($self, $user) = @_;
-  # Allow Engines and Plugin::Authentication to set without warning
-  my $caller = (caller(2))[0];
-  if ( $caller !~ /^Catalyst::(Engine|Plugin::Authentication)/ ) {
-    $self->_context->log->warn(
-      'Attempt to use $c->req->user; this is deprecated. ' .
-      'You probably meant to call $c->user or $c->req->remote_user' );
-  }
+    my ($self, $user) = @_;
+    return if $user; # Allow Engines and Plugin::Authentication to set without warning
+
+    if (! $self->_user_deprecated_has_warned) {
+        $self->_context->log->warn(
+            'Attempt to use $c->req->user; this is deprecated. ' .
+            'You probably meant to call $c->user or $c->req->remote_user'
+        );
+        $self->_user_deprecated_has_warned(1);
+     }
 };
 
 sub args            { shift->arguments(@_) }
@@ -588,13 +591,12 @@ sub uri_with {
 
 =head2 $req->user
 
-Returns the currently logged in user. Deprecated. The method recommended for
-newer plugins is $c->user.
+Returns the currently logged in user. B<Highly deprecated>, do not call,
+this will be removed in version 5.81.
 
 =head2 $req->remote_user
 
-Returns the value of the C<REMOTE_USER> environment variable. Previously
-available via $req->user.
+Returns the value of the C<REMOTE_USER> environment variable.
 
 =head2 $req->user_agent
 
