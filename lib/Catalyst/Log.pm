@@ -43,15 +43,11 @@ has abort => (is => 'rw');
     }
 }
 
-around new => sub {
-    my $orig = shift;
-    my $class = shift;
-    my $self = $class->$orig;
-
-    $self->levels( scalar(@_) ? @_ : keys %LEVELS );
-
-    return $self;
-};
+sub BUILD {
+    my ($self, $args) = @_;
+    my @levels = keys %{ $args->{levels} || {} };
+    $self->levels(scalar(@levels) ? @levels : keys %LEVELS);
+}
 
 sub levels {
     my ( $self, @levels ) = @_;

@@ -2402,25 +2402,47 @@ that this method won't actually set up the log object.
 
 =cut
 
-sub setup_log {
-    my ( $class, $levels ) = @_;
+sub _build_log_instance {
+    my ( $class, $log_class, @args ) = @_;
+    $log_class->new(@args);
+}
 
+sub _build_cli_log_config {
+    my ($class, $levels) = @_;
     $levels ||= '';
     $levels =~ s/^\s+//;
     $levels =~ s/\s+$//;
-    my %levels = map { $_ => 1 } split /\s*,\s*/, $levels;
+    return { levels => { map { $_ => 1 } split /\s*,\s*/, $levels } };
+}
+
+sub _munge_log_config {
+    my ($class, @config) = @_;
+    @config;
+}
+
+sub log_class { 'Catalyst::Log' }
+
+sub setup_log {
+    my ( $class, $cli_levels ) = @_;
+
+    my $log_config = Catalyst::Utils::merge_hashes(
+        $class->config->{'Log'} || {}, $class->_build_cli_log_config($cli_levels)
+    );
+    my $levels = $log_config->{levels};
 
     my $env_debug = Catalyst::Utils::env_value( $class, 'DEBUG' );
     if ( defined $env_debug ) {
-        $levels{debug} = 1 if $env_debug; # Ugly!
-        delete($levels{debug}) unless $env_debug;
+        $levels->{debug} = 1 if $env_debug; # Ugly!
+        delete($levels->{debug}) unless $env_debug;
     }
 
     unless ( $class->log ) {
-        $class->log( Catalyst::Log->new(keys %levels) );
+        $class->log( $class->_build_log_instance(
+            $class->log_class => $class->_munge_log_config(%$log_config)
+        ));
     }
 
-    if ( $levels{debug} ) {
+    if ( $levels->{debug} ) {
         Class::MOP::get_metaclass_by_name($class)->add_method('debug' => sub { 1 });
         $class->log->debug('Debug messages enabled');
     }
