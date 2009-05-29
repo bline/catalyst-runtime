@@ -64,8 +64,11 @@ __PACKAGE__->mk_classdata('_config');
 sub BUILDARGS {
     my $class = shift;
 
-    if (@_ == 1 && ref($_[0]) eq 'HASH') {
-        return $_[0];
+    if (@_ == 1) {
+        if (ref($_[0]) eq 'HASH') {
+            return $_[0];
+        }
+        return {};
     } elsif (@_ == 2) { # is it ($app, $args) or foo => 'bar' ?
         if (blessed($_[0]) ||
            (Class::MOP::is_class_loaded($_[0]) && $_[0]->isa('Catalyst'))) {
@@ -77,7 +80,7 @@ sub BUILDARGS {
         return +{ @_ };
     }
 
-    croak "invalid parameters";
+    return {};
 }
 
 sub COMPONENT {
