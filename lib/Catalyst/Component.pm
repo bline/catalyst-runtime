@@ -9,6 +9,7 @@ use MRO::Compat;
 use mro 'c3';
 use Storable 'dclone';
 use Carp;
+use Scalar::Util 'blessed';
 use namespace::clean -except => 'meta';
 
 with 'MooseX::Emulate::Class::Accessor::Fast';
@@ -66,7 +67,8 @@ sub BUILDARGS {
     if (@_ == 1 && ref($_[0]) eq 'HASH') {
         return $_[0];
     } elsif (@_ == 2) { # is it ($app, $args) or foo => 'bar' ?
-        if (Class::MOP::is_class_loaded($_[0]) && $_[0]->isa('Catalyst')) {
+        if (blessed($_[0]) ||
+           (Class::MOP::is_class_loaded($_[0]) && $_[0]->isa('Catalyst'))) {
             return $_[1];
         } else {
             return +{ @_ };
