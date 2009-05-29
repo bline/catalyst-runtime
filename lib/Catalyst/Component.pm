@@ -7,10 +7,11 @@ use Catalyst::Utils;
 use Class::C3::Adopt::NEXT;
 use MRO::Compat;
 use mro 'c3';
+use Storable 'dclone';
+use namespace::clean -except => 'meta';
 
 with 'MooseX::Emulate::Class::Accessor::Fast';
 with 'Catalyst::ClassData';
-
 
 =head1 NAME
 
@@ -59,21 +60,12 @@ __PACKAGE__->mk_classdata('_plugins');
 __PACKAGE__->mk_classdata('_config');
 
 sub BUILDARGS {
-    my ($self) = @_;
-
-    # Temporary fix, some components does not pass context to constructor
-    my $arguments = ( ref( $_[-1] ) eq 'HASH' ) ? $_[-1] : {};
-
-    my $args =  $self->merge_config_hashes( $self->config, $arguments );
-
-    return $args;
+    return ref($_[-1]) eq 'HASH' ? $_[-1] : {};
 }
 
 sub COMPONENT {
-    my ( $self, $c ) = @_;
+    my ( $self, $app, $args ) = @_;
 
-    # Temporary fix, some components does not pass context to constructor
-    my $arguments = ( ref( $_[-1] ) eq 'HASH' ) ? $_[-1] : {};
     if( my $next = $self->next::can ){
       my $class = blessed $self || $self;
       my ($next_package) = Class::MOP::get_code_info($next);
@@ -82,7 +74,10 @@ sub COMPONENT {
       warn "Your linearized isa hierarchy is: " . join(', ', @{ mro::get_linear_isa($class) }) . "\n";
       warn "Please see perldoc Catalyst::Upgrading for more information about this issue.\n";
     }
-    return $self->new($c, $arguments);
+
+    $args = $self->merge_config_hashes( $self->config, $args );
+
+    return $self->new($app, $args);
 }
 
 sub config {
@@ -97,15 +92,15 @@ sub config {
         # this is a bit of a kludge, required to make
         # __PACKAGE__->config->{foo} = 'bar';
         # work in a subclass.
+        # XXX should this be in ClassData somehow?
         my $class = blessed($self) || $self;
         my $meta = Class::MOP::get_metaclass_by_name($class);
         unless ($meta->has_package_symbol('$_config')) {
-
-            $config = $self->merge_config_hashes( $config, {} );
+            $config = dclone $config;
             $self->_config( $config );
         }
     }
-    return $config;
+    return $self->_config
 }
 
 sub merge_config_hashes {
@@ -134,7 +129,9 @@ __END__
 Called by COMPONENT to instantiate the component; should return an object
 to be stored in the application's component hash.
 
-=head2 COMPONENT($c, $arguments)
+=head2 COMPONENT
+
+C<< my $component_instance = $component->COMPONENT($app, $arguments); >>
 
 If this method is present (as it is on all Catalyst::Component subclasses,
 it is called by Catalyst during setup_components with the application class
@@ -143,6 +140,33 @@ in the case of MyApp::Controller::Foo this would be
 MyApp->config->{'Controller::Foo'}). The arguments are expected to be a
 hashref and are merged with the __PACKAGE__->config hashref before calling
 ->new to instantiate the component.
+
+You can override it in your components to do custom instantiation, using
+something like this:
+
+  sub COMPONENT {
+      my ($class, $app, $args) = @_;
+      $args = $self->merge_config_hashes($self->config, $args);
+      return $class->new($app, $args);
+  }
+
+=head2 BUILDARGS
+
+By default gets C<$app, $args> as parameters.
+
+Processes args passed to C<< ->new >>. By default returns C<$args>, see
+L<Moose::Object>.
+
+If you override L</COMPONENT> to pass different types of parameters to
+C<< ->new >>, override L</BUILDARGS> as well.
+
+By default looks like this:
+
+  sub BUILDARGS {
+      return ref($_[-1]) eq 'HASH' ? $_[-1] : {};
+  }
+
+Because C<< ->new >> is not always passed C<$app>.
 
 =head2 $c->config
 
