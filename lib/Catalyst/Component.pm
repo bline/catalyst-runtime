@@ -72,7 +72,8 @@ sub BUILDARGS {
     } elsif (@_ == 2) { # is it ($app, $args) or foo => 'bar' ?
         if (blessed($_[0]) ||
            (Class::MOP::is_class_loaded($_[0]) && $_[0]->isa('Catalyst'))) {
-            return $_[1];
+            return $_[1] if ref($_[1]) eq 'HASH';
+            return {};
         } else {
             return +{ @_ };
         }
