@@ -18,8 +18,9 @@ L<Catalyst::Controller> subclasses.
 =cut
 
 use Moose;
-
+use Scalar::Util 'looks_like_number';
 with 'MooseX::Emulate::Class::Accessor::Fast';
+use namespace::clean -except => 'meta';
 
 has class => (is => 'rw');
 has namespace => (is => 'rw');
@@ -28,8 +29,6 @@ has attributes => (is => 'rw');
 has name => (is => 'rw');
 has code => (is => 'rw');
 
-no Moose;
-
 use overload (
 
     # Stringify to reverse for debug output etc.
@@ -37,6 +36,10 @@ use overload (
 
     # Codulate to execute to invoke the encapsulated action coderef
     '&{}' => sub { my $self = shift; sub { $self->execute(@_); }; },
+
+    # Which action takes precedence
+    'cmp' => 'compare',
+    '<=>' => 'compare',
 
     # Make general $stuff still work
     fallback => 1,
@@ -68,6 +71,22 @@ sub match {
     my $args = $self->attributes->{Args}[0];
     return 1 unless defined($args) && length($args);
     return scalar( @{ $c->req->args } ) == $args;
+}
+
+sub sort_order {
+    my $self = shift;
+
+    my ($args) = @{ $self->attributes->{Args} || [] };
+
+    return $args if looks_like_number($args);
+
+    return ~0;
+}
+
+sub compare {
+    my ($a1, $a2) = @_;
+
+    return $a1->sort_order <=> $a2->sort_order;
 }
 
 __PACKAGE__->meta->make_immutable;
@@ -104,6 +123,14 @@ context and arguments
 
 Check Args attribute, and makes sure number of args matches the setting.
 Always returns true if Args is omitted.
+
+=head2 sort_order
+
+Returns the value of the C<Args> attribute, or C<~0> if it has no value.
+
+=head2 compare
+
+Returns C<< $a->sort_order <=> $b->sort_order >> .
 
 =head2 namespace
 
