@@ -370,9 +370,7 @@ sub prepare_action {
 
   DESCEND: while (@path) {
         $path = join '/', @path;
-        $path =~ s#^/##;
-
-        $path = '' if $path eq '/';    # Root action
+        $path =~ s#^/+##;
 
         # Check out dispatch types to see if any will handle the path at
         # this level
@@ -459,9 +457,6 @@ sub get_containers {
     }
 
     return reverse grep { defined } @containers, $self->_container_hash->{''};
-
-    #return (split '/', $namespace); # isnt this more clear?
-    my @parts = split '/', $namespace;
 }
 
 =head2 $self->uri_for_action($action, \@captures)
@@ -531,9 +526,28 @@ sub register {
         }
     }
 
+    my @dtypes = @{ $self->_dispatch_types };
+    my @normal_dtypes;
+    my @low_precedence_dtypes;
+
+    for my $type ( @dtypes ) {
+        if ($type->_is_low_precedence) {
+            push @low_precedence_dtypes, $type;
+        } else {
+            push @normal_dtypes, $type;
+        }
+    }
+
     # Pass the action to our dispatch types so they can register it if reqd.
-    foreach my $type ( @{ $self->_dispatch_types } ) {
-        $type->register( $c, $action );
+    my $was_registered = 0;
+    foreach my $type ( @normal_dtypes ) {
+        $was_registered = 1 if $type->register( $c, $action );
+    }
+
+    if (not $was_registered) {
+        foreach my $type ( @low_precedence_dtypes ) {
+            $type->register( $c, $action );
+        }
     }
 
     my $namespace = $action->namespace;
