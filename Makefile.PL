@@ -52,6 +52,7 @@ recommends 'B::Hooks::OP::Check::StashChange';
 
 test_requires 'Class::Data::Inheritable';
 test_requires 'Test::Exception';
+test_requires 'Test::More' => '0.88';
 
 # aggregate tests if AGGREGATE_TESTS is set and a recent Test::Aggregate and a Test::Simple it works with is available
 if ($ENV{AGGREGATE_TESTS} && can_use('Test::Simple', '0.88') && can_use('Test::Aggregate', '0.35_05')) {
@@ -64,6 +65,7 @@ else {
         map  { glob } qw[t/*.t t/aggregate/*.t];
 }
 author_requires 'CatalystX::LeakChecker', '0.03'; # Skipped if this isn't installed
+author_requires 'File::Copy::Recursive'; # For http server test
 
 author_tests 't/author';
 author_requires(map {; $_ => 0 } qw(
