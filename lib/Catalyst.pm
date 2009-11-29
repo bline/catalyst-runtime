@@ -2892,6 +2892,8 @@ David Naughton, C<naughton@umn.edu>
 
 David E. Wheeler
 
+dhoss: Devin Austin <dhoss@cpan.org>
+
 dkubb: Dan Kubb <dan.kubb-cpan@onautopilot.com>
 
 Drew Taylor
