@@ -18,10 +18,11 @@ all_from 'lib/Catalyst/Runtime.pm';
 requires 'List::MoreUtils';
 requires 'namespace::autoclean' => '0.09';
 requires 'namespace::clean';
+requires 'namespace::autoclean';
 requires 'B::Hooks::EndOfScope' => '0.08';
 requires 'MooseX::Emulate::Class::Accessor::Fast' => '0.00903';
-requires 'Class::MOP' => '0.83';
-requires 'Moose' => '0.90';
+requires 'Class::MOP' => '0.95';
+requires 'Moose' => '0.93';
 requires 'MooseX::MethodAttributes::Inheritable' => '0.17';
 requires 'MooseX::Role::WithOverloading' => '0.03';
 requires 'Carp';
@@ -47,9 +48,10 @@ requires 'URI' => '1.35';
 requires 'Task::Weaken';
 requires 'Text::Balanced'; # core in 5.8.x but mentioned for completeness
 requires 'MRO::Compat';
+requires 'MooseX::Getopt' => '0.25';
+requires 'MooseX::Types';
+requires 'MooseX::Types::Common::Numeric';
 requires 'String::RewritePrefix' => '0.004'; # Catalyst::Utils::resolve_namespace
-
-recommends 'B::Hooks::OP::Check::StashChange';
 
 test_requires 'Class::Data::Inheritable';
 test_requires 'Test::Exception';
