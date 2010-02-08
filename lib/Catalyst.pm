@@ -1265,6 +1265,9 @@ sub uri_for {
       ( scalar @args && ref $args[$#args] eq 'HASH' ? pop @args : {} );
 
     carp "uri_for called with undef argument" if grep { ! defined $_ } @args;
+    foreach my $arg (@args) {
+        utf8::encode($arg) if utf8::is_utf8($arg);
+    }
     s/([^$URI::uric])/$URI::Escape::escapes{$1}/go for @args;
     if (blessed $path) { # Action object only.
         s|/|%2F|g for @args;
@@ -1275,6 +1278,12 @@ sub uri_for {
                         ( scalar @args && ref $args[0] eq 'ARRAY'
                          ? @{ shift(@args) }
                          : ()) ];
+
+        foreach my $capture (@$captures) {
+            utf8::encode($capture) if utf8::is_utf8($capture);
+            $capture =~ s/([^$URI::uric])/$URI::Escape::escapes{$1}/go;
+        }
+
         my $action = $path;
         $path = $c->dispatcher->uri_for_action($action, $captures);
         if (not defined $path) {
@@ -1284,6 +1293,8 @@ sub uri_for {
         }
         $path = '/' if $path eq '';
     }
+
+    undef($path) if (defined $path && $path eq '');
 
     unshift(@args, $path);
 
@@ -1316,7 +1327,6 @@ sub uri_for {
           (map {
               my $param = "$_";
               utf8::encode( $param ) if utf8::is_utf8($param);
-              # using the URI::Escape pattern here so utf8 chars survive
               $param =~ s/([^A-Za-z0-9\-_.!~*'() ])/$URI::Escape::escapes{$1}/go;
               $param =~ s/ /+/g;
               "${key}=$param"; } ( ref $val eq 'ARRAY' ? @$val : $val ));
