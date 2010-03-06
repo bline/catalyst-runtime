@@ -1743,6 +1743,8 @@ sub finalize {
         $c->finalize_body;
     }
 
+    $c->log_response;
+
     if ($c->use_stats) {
         my $elapsed = sprintf '%f', $c->stats->elapsed;
         my $av = $elapsed == 0 ? '??' : sprintf '%.3f', 1 / $elapsed;
@@ -1967,8 +1969,7 @@ sub prepare {
     $path       = '/' unless length $path;
     my $address = $c->req->address || '';
 
-    $c->log->debug(qq/"$method" request for "$path" from "$address"/)
-      if $c->debug;
+    $c->log_request;
 
     $c->prepare_action;
 
@@ -1998,17 +1999,6 @@ sub prepare_body {
     $c->engine->prepare_body( $c, @_ );
     $c->prepare_parameters;
     $c->prepare_uploads;
-
-    if ( $c->debug && keys %{ $c->req->body_parameters } ) {
-        my $t = Text::SimpleTable->new( [ 35, 'Parameter' ], [ 36, 'Value' ] );
-        for my $key ( sort keys %{ $c->req->body_parameters } ) {
-            my $param = $c->req->body_parameters->{$key};
-            my $value = defined($param) ? $param : '';
-            $t->row( $key,
-                ref $value eq 'ARRAY' ? ( join ', ', @$value ) : $value );
-        }
-        $c->log->debug( "Body Parameters are:\n" . $t->draw );
-    }
 }
 
 =head2 $c->prepare_body_chunk( $chunk )
@@ -2092,18 +2082,164 @@ sub prepare_query_parameters {
     my $c = shift;
 
     $c->engine->prepare_query_parameters( $c, @_ );
+}
 
-    if ( $c->debug && keys %{ $c->request->query_parameters } ) {
-        my $t = Text::SimpleTable->new( [ 35, 'Parameter' ], [ 36, 'Value' ] );
-        for my $key ( sort keys %{ $c->req->query_parameters } ) {
-            my $param = $c->req->query_parameters->{$key};
+=head2 $c->log_request
+
+Writes information about the request to the debug logs.  This includes:
+
+=over 4
+
+=item * Request method, path, and remote IP address
+
+=item * Request headers (see L</log_headers>)
+
+=item * Query keywords (see L<Catalyst::Request/query_keywords>)
+
+=item * Request parameters
+
+=item * File uploads
+
+=back
+
+=cut
+
+sub log_request {
+    my $c = shift;
+
+    return unless $c->debug;
+
+    my($dump) = grep {$_->[0] eq 'Request' } $c->dump_these;
+    my $request = $dump->[1];
+
+    my ( $method, $path, $address ) = ( $request->method, $request->path, $request->address );
+    $method ||= '';
+    $path = '/' unless length $path;
+    $address ||= '';
+    $c->log->debug(qq/"$method" request for "$path" from "$address"/);
+
+    $c->log_headers('request', $request->headers);
+
+    if ( my $keywords = $request->query_keywords ) {
+        $c->log->debug("Query keywords are: $keywords");
+    }
+
+    $c->log_request_parameters( query => $request->query_parameters, body => $request->body_parameters );
+
+    $c->log_request_uploads($request);
+}
+
+=head2 $c->log_response
+
+Writes information about the response to the debug logs.  This includes:
+
+=over 4
+
+=item * Response status code
+
+=item * Response headers (see L</log_headers>)
+
+=back
+
+=cut
+
+sub log_response {
+    my $c = shift;
+
+    return unless $c->debug;
+
+    my($dump) = grep {$_->[0] eq 'Response' } $c->dump_these;
+    my $response = $dump->[1];
+
+	$c->log->debug(
+		sprintf(
+			'Response Code: %s; Content-Type: %s; Content-Length: %s',
+			$response->status                            || 'unknown',
+			$response->headers->header('Content-Type')   || 'unknown',
+			$response->headers->header('Content-Length') || 'unknown'
+		)
+	);
+}
+
+=head2 $c->log_request_parameters( query => {}, body => {} )
+
+Logs request parameters to debug logs
+
+=cut
+
+sub log_request_parameters {
+    my $c          = shift;
+    my %all_params = @_;
+
+    return unless $c->debug;
+
+    my $column_width = Catalyst::Utils::term_width() - 44;
+    foreach my $type (qw(query body)) {
+        my $params = $all_params{$type};
+        next if ! keys %$params;
+        my $t = Text::SimpleTable->new( [ 35, 'Parameter' ], [ $column_width, 'Value' ] );
+        for my $key ( sort keys %$params ) {
+            my $param = $params->{$key};
             my $value = defined($param) ? $param : '';
-            $t->row( $key,
-                ref $value eq 'ARRAY' ? ( join ', ', @$value ) : $value );
+            $t->row( $key, ref $value eq 'ARRAY' ? ( join ', ', @$value ) : $value );
         }
-        $c->log->debug( "Query Parameters are:\n" . $t->draw );
+        $c->log->debug( ucfirst($type) . " Parameters are:\n" . $t->draw );
     }
 }
+
+=head2 $c->log_request_uploads
+
+Logs file uploads included in the request to the debug logs.
+The parameter name, filename, file type, and file size are all included in
+the debug logs.
+
+=cut
+
+sub log_request_uploads {
+    my $c = shift;
+    my $request = shift;
+    return unless $c->debug;
+    my $uploads = $request->uploads;
+    if ( keys %$uploads ) {
+        my $t = Text::SimpleTable->new(
+            [ 12, 'Parameter' ],
+            [ 26, 'Filename' ],
+            [ 18, 'Type' ],
+            [ 9,  'Size' ]
+        );
+        for my $key ( sort keys %$uploads ) {
+            my $upload = $uploads->{$key};
+            for my $u ( ref $upload eq 'ARRAY' ? @{$upload} : ($upload) ) {
+                $t->row( $key, $u->filename, $u->type, $u->size );
+            }
+        }
+        $c->log->debug( "File Uploads are:\n" . $t->draw );
+    }
+}
+
+=head2 $c->log_headers($type => $headers)
+
+Logs L<HTTP::Headers> (either request or response) to the debug logs.
+
+=cut
+
+sub log_headers {
+    my $c       = shift;
+    my $type    = shift;
+    my $headers = shift;    # an HTTP::Headers instance
+
+    return unless $c->debug;
+
+    my $t = Text::SimpleTable->new( [ 35, 'Header Name' ], [ 40, 'Value' ] );
+    $headers->scan(
+        sub {
+            my ( $name, $value ) = @_;
+            $t->row( $name, $value );
+        }
+    );
+    $c->log->debug( ucfirst($type) . " Headers:\n" . $t->draw );
+}
+
 
 =head2 $c->prepare_read
 
@@ -2131,22 +2267,6 @@ sub prepare_uploads {
     my $c = shift;
 
     $c->engine->prepare_uploads( $c, @_ );
-
-    if ( $c->debug && keys %{ $c->request->uploads } ) {
-        my $t = Text::SimpleTable->new(
-            [ 12, 'Parameter' ],
-            [ 26, 'Filename' ],
-            [ 18, 'Type' ],
-            [ 9,  'Size' ]
-        );
-        for my $key ( sort keys %{ $c->request->uploads } ) {
-            my $upload = $c->request->uploads->{$key};
-            for my $u ( ref $upload eq 'ARRAY' ? @{$upload} : ($upload) ) {
-                $t->row( $key, $u->filename, $u->type, $u->size );
-            }
-        }
-        $c->log->debug( "File Uploads are:\n" . $t->draw );
-    }
 }
 
 =head2 $c->prepare_write
